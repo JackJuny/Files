@@ -8,6 +8,8 @@ env:
   WORKING_DIR: ${{ github.workspace }}
   SOLUTION_PATH: '${{ github.workspace }}\Files.slnx'
   APP_PROJECT_PATH: '${{ github.workspace }}\src\Files.App\Files.App.csproj'
+  APPX_PACKAGE_DIR: '${{ github.workspace }}\artifacts\AppxPackages\'
+  APPX_SELFSIGNED_CERT_PATH: '${{ github.workspace }}\.github\workflows\FilesApp_SelfSigned.pfx'
 jobs:
   build:
     runs-on: windows-latest
@@ -39,19 +41,28 @@ jobs:
           -p:Configuration=$env:CONFIGURATION `
           -p:PublishReadyToRun=true `
           -v:quiet
-    - name: Build Files
+    - name: Create self signed cert as a pfx file
+      run: ./.github/scripts/Generate-SelfCertPfx.ps1 -Destination "$env:APPX_SELFSIGNED_CERT_PATH"
+    - name: Build & package Files
       run: |
         msbuild `
           $env:APP_PROJECT_PATH `
           -t:Build `
           -p:Configuration=$env:CONFIGURATION `
           -p:Platform=$env:ARCHITECTURE `
-          -p:AppxBundle=Never `
-          -p:GenerateAppxPackageOnBuild=false `
+          -p:AppxBundlePlatforms=$env:ARCHITECTURE `
+          -p:AppxBundle=Always `
+          -p:GenerateAppxPackageOnBuild=true `
+          -p:UapAppxPackageBuildMode=SideloadOnly `
+          -p:AppxPackageDir=$env:APPX_PACKAGE_DIR `
+          -p:AppxPackageSigningEnabled=true `
+          -p:PackageCertificateKeyFile=$env:APPX_SELFSIGNED_CERT_PATH `
+          -p:PackageCertificatePassword="" `
+          -p:PackageCertificateThumbprint="" `
           -v:quiet
-    - name: Upload Build Artifacts
+    - name: Upload AppX Package
       uses: actions/upload-artifact@v4
       with:
-        name: 'Files-${{ env.CONFIGURATION }}-${{ env.ARCHITECTURE }}'
-        path: '${{ github.workspace }}\src\Files.App\bin\${{ env.ARCHITECTURE }}\${{ env.CONFIGURATION }}\**'
+        name: 'Files-AppxPackage-${{ env.CONFIGURATION }}-${{ env.ARCHITECTURE }}'
+        path: ${{ env.APPX_PACKAGE_DIR }}
         retention-days: 7
