@@ -1,0 +1,57 @@
+name: Build Files (Fork)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+env:
+  WORKING_DIR: ${{ github.workspace }}
+  SOLUTION_PATH: '${{ github.workspace }}\Files.slnx'
+  APP_PROJECT_PATH: '${{ github.workspace }}\src\Files.App\Files.App.csproj'
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Release]
+        platform: [x64]
+    env:
+      CONFIGURATION: ${{ matrix.configuration }}
+      ARCHITECTURE: ${{ matrix.platform }}
+    steps:
+    - name: Checkout the repository
+      uses: actions/checkout@v4
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+    - name: Restore Files
+      shell: pwsh
+      run: |
+        msbuild $env:SOLUTION_PATH `
+          -t:Restore `
+          -p:Platform=$env:ARCHITECTURE `
+          -p:Configuration=$env:CONFIGURATION `
+          -p:PublishReadyToRun=true `
+          -v:quiet
+    - name: Build Files
+      run: |
+        msbuild `
+          $env:APP_PROJECT_PATH `
+          -t:Build `
+          -p:Configuration=$env:CONFIGURATION `
+          -p:Platform=$env:ARCHITECTURE `
+          -p:AppxBundle=Never `
+          -p:GenerateAppxPackageOnBuild=false `
+          -v:quiet
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: 'Files-${{ env.CONFIGURATION }}-${{ env.ARCHITECTURE }}'
+        path: '${{ github.workspace }}\src\Files.App\bin\${{ env.ARCHITECTURE }}\${{ env.CONFIGURATION }}\**'
+        retention-days: 7
